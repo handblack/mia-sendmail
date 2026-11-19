@@ -1,0 +1,62 @@
+
+name: Deploy Laravel Sendmail
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sendmail-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to Production
+    runs-on: [self-hosted, Linux, X64]
+
+    timeout-minutes: 15
+
+    steps:
+      - name: Deploy Laravel
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cd /var/www/sendmail
+
+          echo "== Checking environment =="
+          php -v
+          composer --version
+
+          echo "== Checking Git status =="
+          test -f .env
+          test -f composer.lock
+          test -z "$(git status --porcelain --untracked-files=no)"
+
+          echo "== Updating source code =="
+          git fetch origin main
+          git checkout main
+          git pull --ff-only origin main
+
+          echo "== Installing PHP dependencies =="
+          composer install \
+            --no-dev \
+            --no-interaction \
+            --prefer-dist \
+            --optimize-autoloader \
+            --no-progress
+
+          echo "== Updating Laravel cache =="
+          php artisan config:cache
+          php artisan view:cache
+
+          echo "== Restarting queue workers =="
+          php artisan queue:restart
+
+          echo "== Deployment completed =="
+          git log -1 --format='%h %s'
