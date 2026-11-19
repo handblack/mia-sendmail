@@ -16,34 +16,100 @@ concurrency:
 
 jobs:
   deploy:
-    name: Deploy to Production
+    name: Deploy Laravel
     runs-on: [self-hosted, Linux, X64]
 
-    timeout-minutes: 15
+    timeout-minutes: 20
+
+    defaults:
+      run:
+        shell: bash
 
     steps:
       - name: Deploy Laravel
-        shell: bash
         run: |
           set -euo pipefail
 
-          cd /var/www/sendmail
+          APP_DIR="/var/www/sendmail"
+          BRANCH="main"
+
+          echo "================================"
+          echo " Deploy Laravel Sendmail"
+          echo "================================"
 
           echo "== Checking environment =="
+          whoami
           php -v
           composer --version
 
+          echo "== Checking project directory =="
+          if [ ! -d "$APP_DIR" ]; then
+            echo "ERROR: Project directory not found"
+            exit 1
+          fi
+
+          cd "$APP_DIR"
+
+          echo "== Checking Laravel files =="
+          if [ ! -f artisan ]; then
+            echo "ERROR: Laravel artisan not found"
+            exit 1
+          fi
+
+          if [ ! -f .env ]; then
+            echo "ERROR: .env not found"
+            exit 1
+          fi
+
+          if [ ! -f composer.json ]; then
+            echo "ERROR: composer.json not found"
+            exit 1
+          fi
+
+          if [ ! -f composer.lock ]; then
+            echo "ERROR: composer.lock not found"
+            exit 1
+          fi
+
           echo "== Checking Git status =="
-          test -f .env
-          test -f composer.lock
-          test -z "$(git status --porcelain --untracked-files=no)"
+          git status --short
 
-          echo "== Updating source code =="
-          git fetch origin main
-          git checkout main
-          git pull --ff-only origin main
+          if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+            echo "ERROR: Local tracked changes detected"
+            exit 1
+          fi
 
-          echo "== Installing PHP dependencies =="
+          echo "== Checking write permissions =="
+          if [ ! -w "$APP_DIR" ]; then
+            echo "ERROR: No write permission on project"
+            exit 1
+          fi
+
+          if [ ! -w storage ]; then
+            echo "ERROR: No write permission on storage"
+            exit 1
+          fi
+
+          if [ ! -w bootstrap/cache ]; then
+            echo "ERROR: No write permission on bootstrap/cache"
+            exit 1
+          fi
+
+          echo "== Fetching repository =="
+          git fetch origin "$BRANCH"
+
+          echo "== Checking branch =="
+          CURRENT_BRANCH="$(git branch --show-current)"
+
+          if [ "$CURRENT_BRANCH" != "$BRANCH" ]; then
+            echo "ERROR: Expected branch $BRANCH"
+            exit 1
+          fi
+
+          echo "== Updating project =="
+          git pull --ff-only origin "$BRANCH"
+
+          echo "== Installing Composer dependencies =="
           composer install \
             --no-dev \
             --no-interaction \
@@ -51,12 +117,22 @@ jobs:
             --optimize-autoloader \
             --no-progress
 
-          echo "== Updating Laravel cache =="
+          echo "== Clearing Laravel cache =="
+          php artisan optimize:clear
+
+          echo "== Rebuilding Laravel cache =="
           php artisan config:cache
           php artisan view:cache
 
-          echo "== Restarting queue workers =="
+          echo "== Restarting Laravel queue workers =="
           php artisan queue:restart
 
-          echo "== Deployment completed =="
+          echo "== Checking Laravel =="
+          php artisan --version
+
+          echo "== Deployment information =="
           git log -1 --format='%h %s'
+
+          echo "================================"
+          echo " Deployment completed successfully"
+          echo "================================"
