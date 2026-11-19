@@ -114,6 +114,21 @@ return [
             // 'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', 'false'),
         ],
 
+        'facturanet' => [
+            'driver' => 'mysql',
+            'url' => env('FACTURANET_DB_URL'),
+            'host' => env('FACTURANET_DB_HOST'),
+            'port' => env('FACTURANET_DB_PORT', 3306),
+            'database' => env('FACTURANET_DB_DATABASE'),
+            'username' => env('FACTURANET_DB_USERNAME'),
+            'password' => env('FACTURANET_DB_PASSWORD'),
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'strict' => true,
+            'engine' => null,
+        ],
     ],
 
     /*
